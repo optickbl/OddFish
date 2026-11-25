@@ -12,6 +12,7 @@ import { ICON, creature, speciesName } from '../art';
 import type { Ctx } from '../ctx';
 import { article, esc, fmtKg } from '../dom';
 import { haptic, sfx } from '../feedback';
+import { seaMood, seaQuestion, seaReady, seaReel, seaReveal } from '../sea';
 
 /** Species first found by the cast that just finished, for the results screen. */
 export let lastNewFinds: string[] = [];
@@ -82,6 +83,7 @@ function renderQuestion(ctx: Ctx, root: HTMLElement, initial: CastState) {
   const canWager = wagerAvailable(s);
   root.innerHTML = `<main id="main" class="view full cast">
     ${topBar(s)}${dotsHtml(s)}
+    <div class="q-scene" aria-hidden="true"></div>
     <div class="ring" role="timer" aria-label="Seconds left"><svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="42"/><circle class="arc" cx="50" cy="50" r="42" stroke-dasharray="${CIRC}" stroke-dashoffset="0"/></svg><b data-secs>${GAME.secondsPerQuestion}</b></div>
     <h1 class="question" id="qtext">${esc(q.text)}.</h1>
     <form data-form autocomplete="off" novalidate>
@@ -102,6 +104,7 @@ function renderQuestion(ctx: Ctx, root: HTMLElement, initial: CastState) {
   const secs = root.querySelector<HTMLElement>('[data-secs]')!;
   const announce = root.querySelector<HTMLElement>('[data-announce]')!;
   const wagerBtn = root.querySelector<HTMLButtonElement>('[data-wager]');
+  seaQuestion(root.querySelector<HTMLElement>('.q-scene')!);
   let busy = false;
   let raf = 0;
   let lastSec = -1;
@@ -119,6 +122,7 @@ function renderQuestion(ctx: Ctx, root: HTMLElement, initial: CastState) {
     commit(toggleWager(s));
     wagerBtn.setAttribute('aria-pressed', String(s.wagerArmed));
     if (s.wagerArmed) { sfx.wager(); haptic('good'); } else { sfx.tap(); }
+    seaMood(s.wagerArmed ? 'excited' : 'thinking');
     input.focus();
   });
 
@@ -205,7 +209,8 @@ function ripple(btn: HTMLElement) {
 function showReeling(root: HTMLElement, s: CastState) {
   const main = root.querySelector('main');
   if (!main) return;
-  main.innerHTML = `${topBar(s)}${dotsHtml(s)}<div class="reeling" role="status"><div class="float"><span class="bobber"></span><span class="rip"></span><span class="rip"></span></div><p>Reeling in…</p></div>`;
+  main.innerHTML = `${topBar(s)}${dotsHtml(s)}<div class="q-scene reel" aria-hidden="true"></div><div class="reeling" role="status"><div class="float"><span class="bobber"></span><span class="rip"></span><span class="rip"></span></div><p>Reeling in…</p></div>`;
+  seaReel(main.querySelector<HTMLElement>('.q-scene')!);
 }
 
 function showNetworkError(ctx: Ctx, root: HTMLElement) {
@@ -223,6 +228,9 @@ function couldHave(questionId: string, day: number): string | null {
   const pool = rare.length ? rare : q.answers;
   return pool[Math.floor(rng(day * 131 + questionId.length * 7)() * pool.length)]?.name ?? null;
 }
+
+/** Seconds until a 3D catch is out of the water (stir + rise), per tier. */
+const REVEAL_DELAY: Record<string, number> = { boot: 1.1, sardine: 0.75, clownfish: 0.85, octopus: 1.1, swordfish: 1.45, leviathan: 2.4 };
 
 function renderReveal(ctx: Ctx, root: HTMLElement, s: CastState, r: CatchRecord, fresh: boolean) {
   const t = tierById(r.tier);
@@ -249,7 +257,9 @@ function renderReveal(ctx: Ctx, root: HTMLElement, s: CastState, r: CatchRecord,
     ? isBoot ? '<small>Captain’s Wager lost</small>' : `<small>Captain’s Wager ×2 · from ${fmtKg(r.baseKg)}</small>`
     : '';
 
-  root.innerHTML = `<main id="main" class="view full reveal ${legend && fresh ? 'legend-reveal' : ''}" aria-live="polite">
+  // With the 3D sea, words wait for the catch to break the surface.
+  const surface = fresh && seaReady() && !ctx.reduced() ? REVEAL_DELAY[r.tier] : 0;
+  root.innerHTML = `<main id="main" class="view full reveal ${legend && fresh ? 'legend-reveal' : ''} ${surface ? 'surfacing' : ''}" style="--rd:${surface}s" aria-live="polite">
     <p class="lead fade-up">${lead}</p>
     <h1 class="fade-up">${esc(name)}${isBoot ? '' : '!'}</h1>
     <div class="stage ${lit ? 'lit' : ''} ${legend ? 'legend' : ''} ${isBoot ? 'boot' : ''}"><div class="rays"></div><div class="halo"></div>${creature(r.species, { title: name })}</div>
@@ -259,6 +269,7 @@ function renderReveal(ctx: Ctx, root: HTMLElement, s: CastState, r: CatchRecord,
     <button class="btn primary fade-up d3" data-next>${last ? 'Weigh your haul' : 'Continue'} ${ICON.arrow}</button>
   </main>`;
 
+  seaReveal(r.species, r.tier, root.querySelector<HTMLElement>('.stage')!, !fresh);
   if (fresh) {
     sfx.reveal(r.tier);
     haptic(isBoot ? 'bad' : legend ? 'legend' : 'good');
@@ -266,7 +277,7 @@ function renderReveal(ctx: Ctx, root: HTMLElement, s: CastState, r: CatchRecord,
   if (!fresh || ctx.reduced()) root.querySelector('main')!.classList.remove('legend-reveal');
 
   const next = root.querySelector<HTMLButtonElement>('[data-next]')!;
-  setTimeout(() => next.isConnected && next.focus({ preventScroll: true }), legend && fresh ? 1700 : 600);
+  setTimeout(() => next.isConnected && next.focus({ preventScroll: true }), (legend && fresh ? 1700 : 600) + surface * 1000);
   let moved = false;
   next.addEventListener('click', () => {
     if (moved) return;

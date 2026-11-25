@@ -8,6 +8,7 @@ import type { Ctx } from '../ctx';
 import { countUp, esc, fmtCountdown, fmtKg, fmtNum, toast } from '../dom';
 import { sfx } from '../feedback';
 import { shareCard, shareText } from '../share';
+import { seaHaul } from '../sea';
 import { lastNewFinds } from './cast';
 
 function verdict(sum: CastSummary): { mood: Mood; line: string } {
@@ -62,6 +63,9 @@ export function renderResults(ctx: Ctx, root: HTMLElement) {
     ${isToday ? `<p class="next">Next cast in <span data-countdown>${fmtCountdown(nextResetAt(now()) - now())}</span></p>` : ''}
   </main>`;
 
+  // The haul, afloat in 3D (the SVG row stays as the fallback).
+  const seaMoodFor = sum.legendaries > 0 || v.mood === 'shocked' ? 'excited' : v.mood === 'happy' ? 'happy' : sum.totalKg < 200 ? 'disappointed' : 'idle';
+  seaHaul(sum.catches.map((c) => c.species), root.querySelector<HTMLElement>('.fishrow')!, seaMoodFor);
   const kg = root.querySelector<HTMLElement>('[data-kg]')!;
   countUp(kg, sum.totalKg, sum.totalKg > 0 ? 1400 : 0, (n) => `${fmtNum(n)} kg`, reduced, sfx.count);
 

@@ -6,6 +6,7 @@ import { ICON, harbourScene, wordmark } from '../art';
 import type { Ctx } from '../ctx';
 import { fmtCountdown, fmtKg } from '../dom';
 import { showHowTo } from '../howto';
+import { seaHome } from '../sea';
 import { startOrResume } from './cast';
 
 export function renderHome(ctx: Ctx, root: HTMLElement) {
@@ -39,6 +40,7 @@ export function renderHome(ctx: Ctx, root: HTMLElement) {
     <section class="daily" aria-labelledby="dc"><p class="sr">Daily Cast number ${day}</p>${body}</section>
   </main>`;
 
+  seaHome(root.querySelector<HTMLElement>('.hero')!);
   root.querySelector('[data-start]')?.addEventListener('click', () => startOrResume(ctx));
   root.querySelector('[data-results]')?.addEventListener('click', () => ctx.go('results'));
   root.querySelector('[data-profile]')?.addEventListener('click', () => ctx.go('profile'));

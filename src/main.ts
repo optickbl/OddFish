@@ -15,6 +15,7 @@ import { renderLogbook } from './ui/views/logbook';
 import { renderProfile } from './ui/views/profile';
 import { renderRecords } from './ui/views/records';
 import { renderResults } from './ui/views/results';
+import { bootSea, seaOff, seaReduced } from './ui/sea';
 
 const ROUTES: Route[] = ['home', 'cast', 'results', 'logbook', 'records', 'profile'];
 const TABS: { r: Route; label: string; icon: string }[] = [
@@ -79,6 +80,9 @@ function render() {
   closeStaleCast();
   const route = currentRoute();
   document.documentElement.classList.toggle('reduce', ctx.reduced());
+  // Screens without a sea moment switch the 3D off; the others ask for it while rendering.
+  seaOff();
+  seaReduced(ctx.reduced());
   root.classList.toggle('wide', route === 'logbook');
   const view = document.createElement('div');
   view.style.display = 'contents';
@@ -102,6 +106,11 @@ setSound(save.settings.sound);
 setHaptics(save.settings.haptics);
 window.addEventListener('hashchange', render);
 render();
+
+// The 3D sea loads after the first screen is up, so it never delays playing.
+const startSea = () => bootSea(ctx.reduced());
+if (document.readyState === 'complete') setTimeout(startSea, 50);
+else window.addEventListener('load', () => setTimeout(startSea, 50), { once: true });
 
 // Trust the server's clock for the daily reset where possible.
 void syncClock(`${import.meta.env.BASE_URL}version.json`).then((ok) => {

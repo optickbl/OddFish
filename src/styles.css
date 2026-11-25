@@ -336,3 +336,44 @@ svg { display: block; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important; transition-duration: .01ms !important; }
 }
+
+/* ── 3D sea ─────────────────────────────
+   One canvas behind everything. Screens keep their SVG art until it's ready,
+   and still use it if WebGL isn't available. */
+.app { position: relative; z-index: 1; }
+canvas.sea { position: fixed; left: 0; top: 0; z-index: 0; display: block; opacity: 0; pointer-events: none; transition: opacity .8s var(--ease); }
+html.has-3d canvas.sea { opacity: 1; }
+html.has-3d.sea-off canvas.sea { opacity: 0; transition-duration: .35s; }
+html.has-3d:not(.sea-off) .view { text-shadow: 0 1px 14px rgba(5, 16, 28, .6); }
+html.has-3d .btn, html.has-3d .sign, html.has-3d .pill { text-shadow: none; }
+
+html.has-3d .hero { height: clamp(230px, 42vh, 410px); }
+html.has-3d .hero > svg { display: none; }
+
+.q-scene { display: none; }
+html.has-3d .q-scene { display: block; height: clamp(84px, 21vh, 210px); margin: -18px -22px 2px; }
+html.has-3d .q-scene.reel { height: clamp(220px, 44vh, 380px); }
+html.has-3d .reeling { min-height: 0; flex: 0 0 auto; margin-top: 8px; }
+html.has-3d .reeling .float { display: none; }
+
+html.has-3d .stage { height: 250px; }
+html.has-3d .stage > * { display: none; }
+.surfacing .fade-up { animation-delay: calc(var(--rd) * .4); }
+.surfacing .d1 { animation-delay: calc(var(--rd) + .1s); }
+.surfacing .d2 { animation-delay: calc(var(--rd) + .25s); }
+.surfacing .d3 { animation-delay: calc(var(--rd) + .4s); }
+
+html.has-3d .fishrow { height: 220px; margin: 6px -22px 0; }
+html.has-3d .fishrow .slot { display: none; }
+@media (max-height: 700px) { html.has-3d .stage { height: 200px; } html.has-3d .fishrow { height: 190px; } }
+
+/* Logbook models */
+.tile img.cr.model { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: contain; margin: 0 0 4px; animation: modelIn .4s var(--ease) both; }
+.tile.found img.cr.model { animation: modelIn .4s var(--ease) both; }
+.tile.unknown img.cr.model { opacity: .9; }
+.sheet img.cr.big.model { width: 260px; height: auto; aspect-ratio: 3 / 2; margin: 0 auto 4px; display: block; }
+.sheet .inspect.live { height: 210px; margin: 0 -8px 4px; cursor: grab; touch-action: pan-y; position: relative; }
+.sheet .inspect.live:active { cursor: grabbing; }
+.sheet .inspect.live canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; }
+.sheet .inspect.live::after { content: 'Drag to turn'; position: absolute; bottom: 2px; left: 0; right: 0; font-size: 11px; color: var(--faint); pointer-events: none; }
+@keyframes modelIn { from { opacity: 0; transform: scale(.94); } }

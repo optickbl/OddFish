@@ -4,6 +4,7 @@ import { ICON, captain, creature } from '../art';
 import type { Ctx } from '../ctx';
 import { esc, fmtDate, fmtKg, sheet } from '../dom';
 import { sfx } from '../feedback';
+import { webglAvailable } from '../sea';
 import { startOrResume } from './cast';
 
 let filter: SetId | 'all' = 'all';
@@ -48,6 +49,31 @@ export function renderLogbook(ctx: Ctx, root: HTMLElement) {
   );
   root.querySelectorAll<HTMLButtonElement>('[data-s]').forEach((b) => b.addEventListener('click', () => openSpecies(ctx, b.dataset.s!)));
   root.querySelector('[data-start]')?.addEventListener('click', () => startOrResume(ctx));
+  if (webglAvailable()) void swapInModels(ctx, root);
+}
+
+/** Replace tile illustrations with renders of the 3D models, once each is ready. */
+async function swapInModels(ctx: Ctx, root: HTMLElement) {
+  let studio: typeof import('../../three/studio');
+  try {
+    studio = await import('../../three/studio');
+  } catch {
+    return;
+  }
+  const tiles = [...root.querySelectorAll<HTMLElement>('.tile[data-s]')];
+  for (const tile of tiles) {
+    const id = tile.dataset.s!;
+    if (!studio.hasModel(id)) continue;
+    const url = await studio.thumbnail(id, !ctx.save.found[id]);
+    if (!url || !tile.isConnected) continue;
+    const svg = tile.querySelector('svg.cr');
+    const img = document.createElement('img');
+    img.className = 'cr model';
+    img.alt = '';
+    img.decoding = 'async';
+    img.src = url;
+    svg?.replaceWith(img);
+  }
 }
 
 function openSpecies(ctx: Ctx, id: string) {
@@ -67,12 +93,40 @@ function openSpecies(ctx: Ctx, id: string) {
     body = `<p class="hint">${esc(hint)}</p>`;
   }
   const meta = [rarityOf(s), weightOf(s)].filter(Boolean);
-  sheet(
+  let stop: (() => void) | null = null;
+  let closed = false;
+  const view = sheet(
     `<button class="icon-btn close" data-close aria-label="Close">${ICON.close}</button>
-     <div class="center ${f ? '' : 'tile unknown'}" style="${f ? '' : 'background:none;box-shadow:none'}">${creature(id, { cls: 'big' })}</div>
+     <div class="center inspect ${f ? '' : 'tile unknown'}" style="${f ? '' : 'background:none;box-shadow:none'}">${creature(id, { cls: 'big' })}</div>
      <h2 class="center">${f ? esc(s.name) : 'Undiscovered'}</h2>
      <div class="facts">${meta.map((m) => `<span class="pill r-${s.tier ?? 'odd'}">${m}</span>`).join('')}</div>
      ${body}`,
-    { label: f ? s.name : 'Undiscovered creature' },
+    { label: f ? s.name : 'Undiscovered creature', onClose: () => { closed = true; stop?.(); } },
   );
+  if (!webglAvailable()) return;
+  // Found: a live model you can turn. Not yet found: its shadow.
+  const host = view.root.querySelector<HTMLElement>('.inspect')!;
+  void import('../../three/studio').then(async (studio) => {
+    if (!studio.hasModel(id) || closed) return;
+    if (!f) {
+      const url = await studio.thumbnail(id, true);
+      const svg = host.querySelector('svg.cr');
+      if (url && svg && !closed) {
+        const img = document.createElement('img');
+        img.className = 'cr big model';
+        img.alt = '';
+        img.src = url;
+        svg.replaceWith(img);
+      }
+      return;
+    }
+    host.classList.add('live');
+    const halt = await studio.inspect(host, id, ctx.reduced());
+    if (closed) return halt();
+    stop = halt;
+    host.tabIndex = 0;
+    host.setAttribute('role', 'img');
+    host.setAttribute('aria-label', `${s.name}. Drag or use the arrow keys to turn it.`);
+    host.querySelector('svg.cr')?.remove();
+  }).catch(() => {});
 }
