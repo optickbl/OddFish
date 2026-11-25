@@ -8,7 +8,7 @@ export const GAME = {
   /** Minimum valid responses for a question before real player frequency is shown. */
   minSampleSize: 200,
   /** Public link used on share cards and copied results. */
-  shareUrl: 'https://optickbl.github.io/oddfish/',
+  shareUrl: 'https://optickbl.github.io/OddFish/',
 } as const;
 
 export type TierId = 'boot' | 'sardine' | 'clownfish' | 'octopus' | 'swordfish' | 'leviathan';
