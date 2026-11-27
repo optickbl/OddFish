@@ -1,5 +1,6 @@
 import { tierById, topicById } from '../../config';
-import { SETS, SPECIES, type SetId, type Species } from '../../content/creatures';
+import { SETS, SPECIES, monthsLabel, type SetId, type Species } from '../../content/creatures';
+import { EXHIBIT_REWARD, exhibits, lifetimeCatches } from '../../core/extras';
 import { ICON, captain, creature } from '../art';
 import type { Ctx } from '../ctx';
 import { esc, fmtDate, fmtKg, sheet } from '../dom';
@@ -9,8 +10,8 @@ import { startOrResume } from './cast';
 
 let filter: SetId | 'all' = 'all';
 
-const rarityOf = (s: Species) => (s.tier ? tierById(s.tier).rarity : 'Oddity');
-const weightOf = (s: Species) => (s.tier && s.tier !== 'boot' ? fmtKg(tierById(s.tier).kg) : '');
+const rarityOf = (s: Species) => (s.set === 'seasonal' ? 'Seasonal' : s.set === 'abyss' ? 'Abyss' : s.variant ? s.name.split(' ')[0] : s.tier ? tierById(s.tier).rarity : 'Oddity');
+const weightOf = (s: Species) => (s.months ? monthsLabel(s.months) : s.tier && s.tier !== 'boot' ? fmtKg(tierById(s.tier).kg) : '');
 
 export function renderLogbook(ctx: Ctx, root: HTMLElement) {
   const found = ctx.save.found;
@@ -25,6 +26,9 @@ export function renderLogbook(ctx: Ctx, root: HTMLElement) {
       ${[{ id: 'all', label: 'All' }, ...SETS].map((f) => `<button type="button" data-f="${f.id}" aria-pressed="${filter === f.id}">${f.label}</button>`).join('')}
     </div>
     <div class="progress"><p class="lbl"><span>Collection progress</span><b>${have} / ${total}</b></p><div class="bar" role="progressbar" aria-label="Collection progress" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${have}"><i style="width:${(have / total) * 100}%"></i></div></div>
+    <h2 class="sub-title">The aquarium</h2>
+    <p class="note center">Complete an exhibit and the Captain pays ${fmtKg(EXHIBIT_REWARD)} into your hold.</p>
+    <div class="exhibits">${exhibits(ctx.save).map((e) => `<button type="button" class="ex ${e.done ? 'done' : ''}" data-f="${e.id}"><b>${esc(e.label)}</b><span>${e.done ? 'Complete' : `${e.have} / ${e.total}`}</span><i style="width:${(e.have / e.total) * 100}%"></i></button>`).join('')}</div>
     ${nothing ? `<div class="empty">${captain('grumpy')}<p>Your Logbook is empty. Every catch you make lands here.</p></div>` : ''}
     <div class="grid">
       ${list.map((s) => {
@@ -90,7 +94,8 @@ function openSpecies(ctx: Ctx, id: string) {
     body = `<p class="hint">Caught ${f.count} ${f.count === 1 ? 'time' : 'times'} · first on ${fmtDate(f.first)}</p>${items ? `<ul class="history">${items}</ul>` : ''}`;
   } else {
     const hint = s.hint ?? `A ${tierById(s.tier!).rarity.toLowerCase()} answer to a ${topicById(s.topic!).label.toLowerCase()} question.`;
-    body = `<p class="hint">${esc(hint)}</p>`;
+    const progress = s.unlockAt ? ` You have ${lifetimeCatches(ctx.save)}.` : '';
+    body = `<p class="hint">${esc(hint + progress)}</p>`;
   }
   const meta = [rarityOf(s), weightOf(s)].filter(Boolean);
   let stop: (() => void) | null = null;

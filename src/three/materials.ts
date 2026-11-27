@@ -16,6 +16,8 @@ export interface CreaturePalette {
   iridescence?: number;
   /** Wet-look gloss; dry things (wood, leather) turn it down. */
   clearcoat?: number;
+  /** Whole-body metal, for Shiny catches. */
+  metal?: number;
 }
 
 export interface SwimParams {
@@ -108,7 +110,7 @@ export function creatureMaterial(p: CreaturePalette, swim: SwimParams, fin = fal
   const m = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     roughness: p.roughness ?? 0.42,
-    metalness: 0,
+    metalness: p.metal ?? 0,
     clearcoat: p.clearcoat ?? 0.55,
     clearcoatRoughness: 0.32,
     sheen: 0.25,

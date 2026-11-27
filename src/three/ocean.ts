@@ -155,10 +155,10 @@ export function makeSky(): THREE.Mesh {
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
-    uniforms: { uMoonDir: { value: MOON_DIR }, uTime: { value: 0 }, uHorizon: { value: HORIZON }, uZenith: { value: ZENITH } },
+    uniforms: { uMoonDir: { value: MOON_DIR }, uTime: { value: 0 }, uHorizon: { value: HORIZON }, uZenith: { value: ZENITH }, uMoon: { value: 1 }, uFlash: { value: 0 } },
     vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }',
     fragmentShader: `
-      uniform vec3 uMoonDir, uHorizon, uZenith; uniform float uTime;
+      uniform vec3 uMoonDir, uHorizon, uZenith; uniform float uTime, uMoon, uFlash;
       varying vec3 vD;
       float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
       void main() {
@@ -168,10 +168,10 @@ export function makeSky(): THREE.Mesh {
         col = mix(col, uHorizon * 0.8, smoothstep(0.0, -0.05, y));
         float md = dot(d, uMoonDir);
         // halo, then the disc with a faint terminator for a little form
-        col += vec3(0.95, 0.8, 0.55) * (pow(max(md, 0.0), 2500.0) * 0.35 + pow(max(md, 0.0), 60.0) * 0.06);
+        col += vec3(0.95, 0.8, 0.55) * (pow(max(md, 0.0), 2500.0) * 0.35 + pow(max(md, 0.0), 60.0) * 0.06) * uMoon;
         float disc = smoothstep(0.99972, 0.99982, md);
         vec3 moon = vec3(1.0, 0.93, 0.78) * (0.92 + 0.08 * smoothstep(-0.02, 0.02, dot(d - uMoonDir, vec3(0.7, 0.7, 0.0))));
-        col = mix(col, moon * 1.15, disc);
+        col = mix(col, moon * 1.15, disc * uMoon);
         // stars: round points on a fine grid, fading toward the horizon
         vec3 g = d * 220.0;
         vec3 cell = floor(g);
@@ -179,7 +179,9 @@ export function makeSky(): THREE.Mesh {
         float r = length(fract(g) - 0.5);
         float tw = 0.55 + 0.45 * sin(uTime * (0.7 + s * 2.4) + s * 40.0);
         float star = step(0.993, s) * smoothstep(0.3, 0.0, r) * smoothstep(0.015, 0.12, y) * tw * (0.5 + 0.5 * fract(s * 91.0));
-        col += vec3(1.0, 0.96, 0.88) * star * 0.85;
+        col += vec3(1.0, 0.96, 0.88) * star * 0.85 * uMoon;
+        // lightning lights the clouds from behind
+        col += vec3(0.75, 0.82, 1.0) * uFlash * (0.35 + 0.65 * smoothstep(-0.05, 0.5, y));
         gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
       }`,

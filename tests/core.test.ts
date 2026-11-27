@@ -223,9 +223,9 @@ describe('streaks and records', () => {
     expect(previousBest(save, 3)).toBeNull();
     expect(previousBest(save, 4)).toBe(save.history[0].totalKg);
   });
-  it('has 40 fish variants and 6 oddities to collect', () => {
-    expect(SPECIES.filter((s) => s.set !== 'oddities')).toHaveLength(40);
-    expect(SPECIES).toHaveLength(46);
+  it('has 40 topic fish, 15 variants, 12 seasonal visitors, 3 abyss creatures and 6 oddities', () => {
+    expect(SPECIES.filter((s) => s.set !== 'oddities')).toHaveLength(70);
+    expect(SPECIES).toHaveLength(76);
   });
 });
 

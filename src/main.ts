@@ -1,25 +1,28 @@
 import './styles.css';
 import { now, syncClock } from './core/clock';
-import { forfeitRest } from './core/game';
+import { applyFreezes, boatLevel, harbourSize, lifetimeKg, rankFor, resolveStreakWager, weatherFor } from './core/extras';
+import { castKind, forfeitRest } from './core/game';
 import { dayNumber } from './core/schedule';
 import { getEngine } from './services/engine';
 import { loadSave, persist } from './services/storage';
 import { captureSessionFromUrl } from './services/supabase';
-import { ICON } from './ui/art';
+import { ICON, setOutfit } from './ui/art';
 import type { Ctx, Route } from './ui/ctx';
-import { reducedMotion, toast } from './ui/dom';
+import { fmtKg, reducedMotion, toast } from './ui/dom';
 import { setHaptics, setSound } from './ui/feedback';
 import { finalizeCast, renderCast } from './ui/views/cast';
+import { renderHarbour } from './ui/views/harbour';
 import { renderHome } from './ui/views/home';
 import { renderLogbook } from './ui/views/logbook';
 import { renderProfile } from './ui/views/profile';
 import { renderRecords } from './ui/views/records';
 import { renderResults } from './ui/views/results';
-import { bootSea, seaOff, seaReduced } from './ui/sea';
+import { bootSea, seaLook, seaOff, seaReduced } from './ui/sea';
 
-const ROUTES: Route[] = ['home', 'cast', 'results', 'logbook', 'records', 'profile'];
+const ROUTES: Route[] = ['home', 'cast', 'results', 'harbour', 'logbook', 'records', 'profile'];
 const TABS: { r: Route; label: string; icon: string }[] = [
   { r: 'home', label: 'Home', icon: ICON.home },
+  { r: 'harbour', label: 'Harbour', icon: ICON.boat },
   { r: 'logbook', label: 'Logbook', icon: ICON.book },
   { r: 'records', label: 'Records', icon: ICON.trophy },
   { r: 'profile', label: 'Profile', icon: ICON.user },
@@ -69,15 +72,37 @@ function navHtml(active: Route) {
 /** A cast left over from a previous day keeps its catches; unanswered questions become boots. */
 function closeStaleCast() {
   const c = save.current;
-  if (c && c.day < ctx.today()) {
+  if (c && c.day < ctx.today() && castKind(c) === 'daily') {
     finalizeCast(ctx, forfeitRest(c, now()));
   }
+}
+
+/** Once a day: freezes cover missed days, the Streak Wager settles. */
+function dailyChecks() {
+  const today = ctx.today();
+  const streakBefore = save.streak.current;
+  const used = applyFreezes(save, today);
+  const w = resolveStreakWager(save, today);
+  if (used || w) ctx.persist();
+  if (used) toast(`${used === 1 ? 'A streak freeze' : `${used} streak freezes`} kept your ${streakBefore}-day streak alive`);
+  else if (w === 'lost') toast('A missed day sank your Streak Wager');
+  else if (w === 'won' && save.lastStreakWager) toast(`Streak Wager won: +${fmtKg(save.lastStreakWager.stake * 2)}`);
+}
+
+/** The Captain dresses for your rank; the sea reflects your streak and your Logbook. */
+function dressSea() {
+  const today = ctx.today();
+  const rank = rankFor(lifetimeKg(save)).rank;
+  setOutfit(rank);
+  seaLook({ weather: weatherFor(save, today), buoys: harbourSize(save), boat: boatLevel(save), outfit: { coat: rank.coat, band: rank.band } });
 }
 
 function render() {
   leaveFns.forEach((f) => { try { f(); } catch { /* ignore */ } });
   leaveFns = [];
   closeStaleCast();
+  dailyChecks();
+  dressSea();
   const route = currentRoute();
   document.documentElement.classList.toggle('reduce', ctx.reduced());
   // Screens without a sea moment switch the 3D off; the others ask for it while rendering.
@@ -87,7 +112,7 @@ function render() {
   const view = document.createElement('div');
   view.style.display = 'contents';
   try {
-    ({ home: renderHome, cast: renderCast, results: renderResults, logbook: renderLogbook, records: renderRecords, profile: renderProfile })[route](ctx, view);
+    ({ home: renderHome, cast: renderCast, results: renderResults, harbour: renderHarbour, logbook: renderLogbook, records: renderRecords, profile: renderProfile })[route](ctx, view);
   } catch (e) {
     console.error(e);
     view.innerHTML = `<main id="main" class="view full"><div class="err" role="alert"><h2>Something snagged</h2><p>The Captain dropped the net. Your progress is safe.</p><button class="btn primary" data-reload>Reload</button></div></main>`;
@@ -97,7 +122,7 @@ function render() {
   if (currentRoute() !== route) return;
   root.replaceChildren(view);
   if (route !== 'cast') root.insertAdjacentHTML('beforeend', navHtml(route));
-  const title = { home: 'Oddfish', cast: 'Daily Cast · Oddfish', results: 'Your haul · Oddfish', logbook: 'Logbook · Oddfish', records: 'Records · Oddfish', profile: 'Profile · Oddfish' }[route];
+  const title = { home: 'Oddfish', cast: 'Daily Cast · Oddfish', results: 'Your haul · Oddfish', harbour: 'Harbour · Oddfish', logbook: 'Logbook · Oddfish', records: 'Records · Oddfish', profile: 'Profile · Oddfish' }[route];
   document.title = title;
   window.scrollTo(0, 0);
 }

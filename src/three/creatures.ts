@@ -118,10 +118,12 @@ export async function makeCreature(species: string): Promise<Creature> {
   const root = new THREE.Group();
   const model = src.clone(true);
   const mats: THREE.MeshPhysicalMaterial[] = [];
-  const pal = paletteFor(art, s?.topic ?? null);
+  const pal = s?.look ? { ...def.palette, ...s.look.gl } : paletteFor(art, s?.topic ?? null);
   const pattern = (['sardine', 'clownfish', 'octopus', 'swordfish', 'leviathan', 'boot'].includes(art) ? art : 'none') as Pattern;
-  const bodyMat = creatureMaterial(pal, def.swim, false, pattern);
-  const finMat = creatureMaterial(pal, def.swim, true);
+  // Mutants swim with a wobble.
+  const swim = s?.variant === 'mutant' ? { ...def.swim, amp: def.swim.amp * 1.9, freq: def.swim.freq * 1.4 } : def.swim;
+  const bodyMat = creatureMaterial(pal, swim, false, pattern);
+  const finMat = creatureMaterial(pal, swim, true);
   const eyeMat = eyeMaterial();
   mats.push(bodyMat, finMat, eyeMat);
   const trims: { mesh: THREE.Mesh; mat: THREE.Material }[] = [];

@@ -5,7 +5,8 @@ import { makeCaptain, type Captain, type Mood } from './captain';
 import { has3D, loadModel, makeCreature, type Creature } from './creatures';
 import { lightRig, makeRenderer, nightEnvironment } from './env';
 import { clock, creatureMaterial, tickMaterials } from './materials';
-import { makeOcean, makeSky, SEA_LEVEL } from './ocean';
+import { HORIZON, makeOcean, makeSky, SEA_LEVEL, ZENITH } from './ocean';
+import { PRESETS, Rain, makeBuoys, makeDressing, waveFlag, type SeaLook } from './weather';
 
 /**
  * The one 3D scene behind the interface: a night sea, the Captain's boat, and whatever
@@ -25,6 +26,8 @@ export interface Stage {
   /** The line went taut: the bobber dips. */
   bite(): void;
   mood(m: Mood): void;
+  /** Weather, harbour buoys, boat dressing and the Captain's outfit. */
+  setLook(look: Partial<SeaLook>): void;
   setReduced(r: boolean): void;
   dispose(): void;
 }
@@ -192,6 +195,20 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
   const bobber = makeBobber();
   scene.add(bobber);
 
+  // ── Weather, harbour, boat dressing ──
+  const rain = new Rain();
+  scene.add(rain.lines);
+  const buoys = makeBuoys();
+  scene.add(buoys.group);
+  const dressing = makeDressing();
+  boatRig.add(dressing.pole, dressing.flag, dressing.string);
+  const trimCalm = (boatMats.Trim as THREE.MeshPhysicalMaterial).color.clone();
+  const look: SeaLook = { weather: 'calm', buoys: 0, boat: { pennant: false, lanterns: false, gold: false }, outfit: { coat: '#1d3550', band: '#1d3550' } };
+  const wx = { calm: PRESETS.calm.calm, moon: 1, env: 0.7, rain: 0, key: 2.1 };
+  let flash = 0;
+  let nextFlash = 4;
+  let moteT = 0;
+
   // Catch lighting and effects
   const spot = new THREE.PointLight(0xffe4c0, 0, 7, 1.3);
   scene.add(spot);
@@ -327,7 +344,9 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
 
     // 3. Rarer catches get light, sparkle and a bigger reaction.
     if (tier !== 'leviathan') captain.setMood(mood);
-    const sparkles = { boot: 0, sardine: 0, clownfish: 10, octopus: 26, swordfish: 50, leviathan: 90 }[tier];
+    const sp = speciesById(species);
+    const special = sp?.variant === 'shiny' ? 60 : sp?.set === 'abyss' || sp?.set === 'seasonal' ? 35 : sp?.variant ? 20 : 0;
+    const sparkles = { boot: 0, sardine: 0, clownfish: 10, octopus: 26, swordfish: 50, leviathan: 90 }[tier] + special;
     if (sparkles) setTimeout(() => my === token && sparkle.emit(hover.clone().setY(hover.y - box.y * 0.2), sparkles, 0.55, [0.25, 0.9], len * 0.45), reduced ? 0 : RISE[tier] * 450);
     if (tier === 'leviathan') setTimeout(() => my === token && captain.setMood('excited'), reduced ? 0 : 1500);
     await wait(RISE[tier] * 800);
@@ -467,8 +486,48 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
     }
     // a Leviathan: the sea brightens, the moonlight warms, a column of light comes down
     legend += (legendTarget - legend) * Math.min(1, dt * 1.6);
-    scene.environmentIntensity = 0.7 + legend * 0.45;
-    rig.key.intensity = 2.1 + legend * 0.4;
+    // weather eases in over a few seconds
+    const P = PRESETS[look.weather];
+    const kw = Math.min(1, dt * (reduced ? 6 : 0.9));
+    wx.calm += (P.calm * (reduced ? 0.6 : 1) - wx.calm) * kw;
+    wx.moon += (P.moon - wx.moon) * kw;
+    wx.env += (P.env - wx.env) * kw;
+    wx.rain += (P.rain - wx.rain) * kw;
+    wx.key += (P.key - wx.key) * kw;
+    ocean.uniforms.uCalm.value = wx.calm;
+    (ocean.uniforms.uDeep.value as THREE.Color).lerp(P.deep, kw);
+    (ocean.uniforms.uShallow.value as THREE.Color).lerp(P.shallow, kw);
+    (ocean.uniforms.uSky.value as THREE.Color).lerp(P.sky, kw);
+    HORIZON.lerp(P.horizon, kw);
+    ZENITH.lerp(P.zenith, kw);
+    const skyU = (sky.material as THREE.ShaderMaterial).uniforms;
+    skyU.uMoon.value = wx.moon;
+    rain.update(dt, wx.rain);
+    // lightning, now and then, in a storm
+    if (look.weather === 'storm' && !reduced) {
+      nextFlash -= dt;
+      if (nextFlash <= 0) { flash = 1; nextFlash = 5 + Math.random() * 9; }
+    }
+    flash = Math.max(0, flash - dt * 2.6);
+    const fl = flash > 0 ? flash * (0.6 + 0.4 * Math.sin(t * 60)) : 0;
+    skyU.uFlash.value = fl * 0.7;
+    // golden motes drift up around the boat
+    if (look.weather === 'golden' && mode === 'home' && !reduced) {
+      moteT -= dt;
+      if (moteT <= 0) { moteT = 0.35; sparkle.emit(new THREE.Vector3((Math.random() - 0.5) * 4, SEA_LEVEL + 0.05, (Math.random() - 0.3) * 2.5), 2, 0.15, [0.2, 0.5], 0.6); }
+    }
+    for (const b of buoys.items) {
+      if (!b.visible) continue;
+      const by = ocean.heightAt(b.position.x, b.position.z, t);
+      b.position.y = by - 0.06;
+      b.rotation.z = Math.sin(t * 1.3 + b.userData.phase) * 0.12 * motion * (1 + wx.rain);
+      b.rotation.x = Math.cos(t * 1.1 + b.userData.phase) * 0.1 * motion;
+    }
+    if (dressing.flag.visible) waveFlag(dressing.flag, t, wx.rain);
+
+    scene.environmentIntensity = wx.env + legend * 0.45;
+    rig.key.intensity = wx.key + legend * 0.4 + fl * 3;
+    rig.moon.intensity = 1.4 * Math.max(0.3, wx.moon) + fl * 2;
     beam.visible = legend > 0.01;
     if (beam.visible && shown[0]) {
       beam.position.set(shown[0].to.x, SEA_LEVEL - 0.1, shown[0].to.z - 0.2);
@@ -529,6 +588,20 @@ export async function createStage(canvas: HTMLCanvasElement): Promise<Stage> {
       ocean.ripple(CATCH_SPOT.x, CATCH_SPOT.z, clock.t, 0.7);
     },
     mood: (m) => captain.setMood(m),
+    setLook(l) {
+      Object.assign(look, l);
+      if (l.buoys !== undefined) buoys.items.forEach((b, i) => (b.visible = i < look.buoys));
+      if (l.boat) {
+        dressing.pole.visible = l.boat.pennant || l.boat.lanterns;
+        dressing.flag.visible = l.boat.pennant;
+        dressing.string.visible = l.boat.lanterns;
+        const trim = boatMats.Trim as THREE.MeshPhysicalMaterial;
+        if (l.boat.gold) { trim.color.set(0xe2ad55); trim.metalness = 0.9; trim.roughness = 0.3; }
+        else { trim.color.copy(trimCalm); trim.metalness = 0; trim.roughness = 0.55; }
+      }
+      if (l.outfit) captain.setOutfit(l.outfit.coat, l.outfit.band);
+      kick();
+    },
     setReduced(r) {
       reduced = r;
     },

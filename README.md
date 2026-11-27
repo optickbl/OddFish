@@ -33,6 +33,11 @@ Pushing to `main` builds, tests and deploys to GitHub Pages (`.github/workflows/
 | 3D scene: sea, sky, boat, catch reveals, haul | `src/three/stage.ts`, `src/three/ocean.ts` |
 | 3D creatures, materials, Captain rig, Logbook renders | `src/three/creatures.ts`, `materials.ts`, `captain.ts`, `studio.ts` |
 | How screens talk to the 3D scene | `src/ui/sea.ts` |
+| Bait, Surprise Tide, variants, seasonal and abyss creatures, upgrades, freezes, Streak Wager, orders, ranks, milestones, weather | `src/core/extras.ts` |
+| Seasonal visitors, abyss creatures, Shiny/Night/Mutant variants | `src/content/creatures.ts` |
+| The Captain's Log | `src/content/lore.ts` |
+| Harbour tab (rank, upgrades, freezes, Streak Wager, missed days, log) | `src/ui/views/harbour.ts` |
+| Storm, golden sea, buoys, boat dressing | `src/three/weather.ts` |
 | 3D models (built by script, see below) | `art/*.py` → `public/models/*.glb` |
 | Illustrations (SVG fallback when WebGL isn't available) | `src/ui/art.ts` |
 
@@ -68,6 +73,22 @@ never changes later.
 Without a backend there is no shared answer data, so **every rarity shown is an estimate** and is
 labelled that way. Progress is stored on the device (Profile → Back up progress to move it).
 The daily reset uses the web server’s clock where it can, and the day never goes backwards.
+
+## Solo hooks
+
+Everything here works for one player on one device:
+
+- **Bait**: before each cast, pick one of the day's topics; its catches weigh ×2.
+- **Surprise Tide**: a 90-minute ×2 window at a different time each day (07:00–21:00 UTC). Shown in the app only; a push notification needs a server, so it comes with online play.
+- **Captain's orders**: one weekly goal, +400 kg.
+- **Variants**: Shiny (1 in 50, ×1.5), Mutant (correct inside 5 s, ×1.5), Night (8 pm–6 am local, ×1.25).
+- **Seasonal visitors** (12, by local month) and **Abyss creatures** (unlock at 25/75/150 lifetime catches).
+- **Harbour**: every haul goes into the hold; spend it on the Long Rod, Lucky Lantern, Sonar and Salvage Net, streak freezes, or a 7-day Streak Wager. Missed days can be replayed at half weight, one a day.
+- **Ranks**, **streak milestones** (3 → 365 days, boat pennant / lanterns / gold trim), **beginner's luck** for the first 7 casts, a **7-day average target**, **aquarium exhibits** (+1,000 kg each) and the **Captain's Log** (a page every 3 Daily Casts).
+
+Bait, tide, variants and upgrades are applied on the device. When online play is switched on,
+the server's 20-second deadline doesn't know about the Long Rod yet; `submit_answer` needs the
+extra seconds before rod upgrades are fair online.
 
 ## Online play (switch on later)
 

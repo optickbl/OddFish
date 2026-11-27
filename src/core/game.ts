@@ -1,5 +1,6 @@
 import { GAME, WAGER_MULTIPLIER, tierById, tierIndex, type TierId, type TopicId } from '../config';
-import { speciesId, type OddityId } from '../content/creatures';
+import { speciesId, type OddityId, type VariantId } from '../content/creatures';
+import { decorate, limitOf, type CastKind, type CastMods, type Multiplier } from './extras';
 import { questionById } from './answers';
 import { resolveRarity, type QuestionStats, type RaritySource } from './rarity';
 import { validate } from './validate';
@@ -27,6 +28,16 @@ export interface CatchRecord {
   /** Seconds left when the answer was cast. */
   secondsLeft: number;
   at: number;
+  /** Variant creature (Shiny, Night, Mutant), if any. */
+  variant?: VariantId;
+  /** A seasonal visitor or an abyss creature took the place of the usual catch. */
+  special?: 'seasonal' | 'abyss';
+  /** Beginner's luck upgraded this catch. */
+  boost?: 'luck';
+  /** Everything that multiplied the weight. */
+  mults?: Multiplier[];
+  /** Weight salvaged from an Old Boot by the Salvage Net. */
+  salvage?: number;
 }
 
 export interface CastState {
@@ -41,14 +52,28 @@ export interface CastState {
   /** Question index the wager was spent on. */
   wagerIndex: number | null;
   status: 'playing' | 'complete';
+  /** Bait, tide, upgrades and the rest, fixed when the cast began. Absent on older saves. */
+  mods?: CastMods;
+  /** Beginner's luck has been spent this cast. */
+  luckUsed?: boolean;
+  /** Question indexes where a Sonar hint was used. */
+  sonarUsed?: number[];
 }
 
 export const LIMIT_MS = GAME.secondsPerQuestion * 1000;
 /** Allowance for the time between pressing Cast and the game handling it. */
 const GRACE_MS = 600;
 
-export function newCast(day: number, questionIds: string[]): CastState {
-  return { day, questionIds, index: 0, startedAt: null, catches: [], wagerArmed: false, wagerIndex: null, status: 'playing' };
+export function newCast(day: number, questionIds: string[], mods?: CastMods): CastState {
+  const s: CastState = { day, questionIds, index: 0, startedAt: null, catches: [], wagerArmed: false, wagerIndex: null, status: 'playing' };
+  return mods ? { ...s, mods, luckUsed: false, sonarUsed: [] } : s;
+}
+
+export const castKind = (s: CastState): CastKind => s.mods?.kind ?? 'daily';
+export const sonarLeft = (s: CastState) => Math.max(0, (s.mods?.sonar ?? 0) - (s.sonarUsed?.length ?? 0));
+export function useSonar(s: CastState): CastState {
+  if (sonarLeft(s) <= 0 || s.sonarUsed?.includes(s.index) || isAnswered(s)) return s;
+  return { ...s, sonarUsed: [...(s.sonarUsed ?? []), s.index] };
 }
 
 export const currentQuestion = (s: CastState) => questionById(s.questionIds[s.index]);
@@ -61,8 +86,9 @@ export function startQuestion(s: CastState, at: number): CastState {
 }
 
 export function remainingMs(s: CastState, at: number): number {
-  if (s.startedAt === null) return LIMIT_MS;
-  return Math.max(0, LIMIT_MS - (at - s.startedAt));
+  const limit = limitOf(s);
+  if (s.startedAt === null) return limit;
+  return Math.max(0, limit - (at - s.startedAt));
 }
 
 export function toggleWager(s: CastState): CastState {
@@ -88,8 +114,9 @@ export function castAnswer(s: CastState, input: string, at: number, stats: Quest
   const q = currentQuestion(s);
   if (!q) throw new Error(`Unknown question ${s.questionIds[s.index]}`);
 
+  const limit = limitOf(s);
   const elapsed = at - s.startedAt;
-  const timedOut = elapsed > LIMIT_MS + GRACE_MS;
+  const timedOut = elapsed > limit + GRACE_MS;
   const text = timedOut ? '' : input.trim().slice(0, 80);
   const verdict = text ? validate(q, text) : null;
   const wager = s.wagerArmed && s.wagerIndex === null;
@@ -104,18 +131,21 @@ export function castAnswer(s: CastState, input: string, at: number, stats: Quest
       baseKg, kg: wager ? baseKg * WAGER_MULTIPLIER : baseKg, wager,
       pct: rarity.pct, source: rarity.source, sample: rarity.sample,
       species: speciesId(rarity.tier, q.topic), timedOut: false,
-      secondsLeft: Math.max(0, (LIMIT_MS - elapsed) / 1000), at,
+      secondsLeft: Math.max(0, (limit - elapsed) / 1000), at,
     };
   } else {
     record = {
       day: s.day, index: s.index, questionId: q.id, questionText: q.text, topic: q.topic, input: text,
       answerId: null, answerName: null, tier: 'boot', baseKg: 0, kg: 0, wager,
       pct: null, source: null, sample: null, species: 'boot', timedOut: timedOut || !text,
-      secondsLeft: Math.max(0, (LIMIT_MS - elapsed) / 1000), at,
+      secondsLeft: Math.max(0, (limit - elapsed) / 1000), at,
     };
   }
+  const d = decorate(record, s);
+  record = d.rec;
   const state: CastState = {
     ...s,
+    luckUsed: s.mods ? d.luckUsed : s.luckUsed,
     catches: [...s.catches, record],
     wagerArmed: false,
     wagerIndex: wager ? s.index : s.wagerIndex,
@@ -132,7 +162,7 @@ export function advance(s: CastState): CastState {
 
 /** Handles a reload or a return to the app mid-question: an expired question becomes a boot. */
 export function settleExpired(s: CastState, at: number): CastOutcome {
-  if (s.status === 'playing' && s.startedAt !== null && !isAnswered(s) && at - s.startedAt > LIMIT_MS + GRACE_MS) {
+  if (s.status === 'playing' && s.startedAt !== null && !isAnswered(s) && at - s.startedAt > limitOf(s) + GRACE_MS) {
     return castAnswer(s, '', at);
   }
   return { state: s, record: null };
@@ -147,8 +177,9 @@ export function forfeitRest(s: CastState, at: number): CastState {
   let state = s;
   while (state.status === 'playing') {
     if (!isAnswered(state)) {
-      const started = state.startedAt ?? at - LIMIT_MS - GRACE_MS - 1;
-      state = castAnswer({ ...state, startedAt: started, wagerArmed: false }, '', Math.max(at, started + LIMIT_MS + GRACE_MS + 1)).state;
+      const limit = limitOf(state);
+      const started = state.startedAt ?? at - limit - GRACE_MS - 1;
+      state = castAnswer({ ...state, startedAt: started, wagerArmed: false }, '', Math.max(at, started + limit + GRACE_MS + 1)).state;
     }
     state = advance(state);
   }
@@ -164,9 +195,15 @@ export interface CastSummary {
   heaviest: CatchRecord | null;
   wager: 'won' | 'lost' | 'unused';
   legendaries: number;
+  /** 'archive' for a missed-day cast. Absent on older saves (daily). */
+  kind?: CastKind;
+  /** The Daily Cast number on which this was played (differs from day for missed-day casts). */
+  playedOn?: number;
+  /** Bait used, if any. */
+  bait?: string | null;
 }
 
-export function summarize(s: CastState): CastSummary {
+export function summarize(s: CastState, playedOn: number = s.day): CastSummary {
   const catches = s.catches.slice().sort((a, b) => a.index - b.index);
   const correct = catches.filter((c) => c.tier !== 'boot');
   const rarest = correct.reduce<CatchRecord | null>((best, c) => {
@@ -186,6 +223,9 @@ export function summarize(s: CastState): CastSummary {
     heaviest,
     wager: !w ? 'unused' : w.tier === 'boot' ? 'lost' : 'won',
     legendaries: catches.filter((c) => c.tier === 'leviathan').length,
+    kind: castKind(s),
+    playedOn,
+    bait: s.mods?.bait ?? null,
   };
 }
 
