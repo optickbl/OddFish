@@ -1,7 +1,7 @@
 import type { SaveData } from '../core/progress';
 import type { Engine } from '../services/engine';
 
-export type Route = 'home' | 'cast' | 'results' | 'logbook' | 'records' | 'profile';
+export type Route = 'home' | 'cast' | 'results' | 'harbour' | 'logbook' | 'records' | 'profile';
 
 export interface Ctx {
   save: SaveData;

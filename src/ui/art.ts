@@ -1,5 +1,5 @@
 import { topicById, type TierId, type TopicId } from '../config';
-import { speciesById, type OddityId } from '../content/creatures';
+import { speciesById, type OddityId, type Species } from '../content/creatures';
 
 /** Flat, layered shading: no outlines, no gradients, readable at small sizes. */
 export interface Palette { base: string; shade: string; light: string; accent: string }
@@ -131,19 +131,41 @@ export function paletteFor(tier: Exclude<TierId, 'boot'>, topic: TopicId | null)
   return { base: t.base, shade: t.shade, light: t.light, accent: t.shade };
 }
 
-function inner(art: TierId | OddityId, topic: TopicId | null): string {
+function inner(art: TierId | OddityId, topic: TopicId | null, look?: Palette): string {
   if (art in ODD) return ODD[art as OddityId];
   const t = art as Exclude<TierId, 'boot'>;
-  return FISH[t](paletteFor(t, topic));
+  return FISH[t](look ?? paletteFor(t, topic));
 }
 
-/** Draw a creature. `species` is a species id ("octopus:science", "boot", "pearl") or a bare tier. */
+/** Where each fish's eye sits, for the Mutant's extra one. */
+const EYE_AT: Record<Exclude<TierId, 'boot'>, [number, number, number]> = {
+  sardine: [90, 36, 2.4], clownfish: [84, 34, 2.6], octopus: [61, 22, 2.8], swordfish: [86, 35, 2.2], leviathan: [92, 37, 1.9],
+};
+
+function fx(s: Species): string {
+  const t = s.tier as Exclude<TierId, 'boot'> | null;
+  if (s.variant === 'shiny') {
+    return `<g class="glint" fill="#fff7da"><path d="M24 14 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z"/><path d="M98 58 l1.4 3.6 3.6 1.4 -3.6 1.4 -1.4 3.6 -1.4 -3.6 -3.6 -1.4 3.6 -1.4z"/><path d="M106 16 l1 2.5 2.5 1 -2.5 1 -1 2.5 -1 -2.5 -2.5 -1 2.5 -1z"/></g>`;
+  }
+  if (s.variant === 'mutant' && t) {
+    const [x, y, r] = EYE_AT[t];
+    return eye(x, y, r) + `<g fill="#c6ff7a" opacity=".55"><circle cx="40" cy="44" r="2.2"/><circle cx="52" cy="48" r="1.4"/><circle cx="46" cy="36" r="1.2"/></g>`;
+  }
+  if (s.variant === 'night') {
+    return `<g fill="#7ff0e4"><circle cx="18" cy="16" r="1.2" opacity=".8"/><circle cx="104" cy="12" r="1" opacity=".6"/><circle cx="12" cy="62" r=".9" opacity=".6"/></g>`;
+  }
+  return '';
+}
+
+/** Draw a creature. `species` is a species id ("octopus:science", "shiny:octopus", "boot") or a bare tier. */
 export function creature(species: string, opts: { cls?: string; title?: string } = {}): string {
   const s = speciesById(species);
   const art = s ? s.art : (species as TierId);
   const topic = s ? s.topic : null;
   const label = opts.title ? `role="img" aria-label="${opts.title}"` : 'aria-hidden="true"';
-  return `<svg class="cr ${opts.cls ?? ''}" viewBox="0 0 120 80" ${label}>${inner(art, topic)}</svg>`;
+  const extra = s ? fx(s) : '';
+  const cls = [opts.cls ?? '', s?.variant ? `v-${s.variant}` : '', s?.set === 'abyss' ? 'v-abyss' : ''].join(' ');
+  return `<svg class="cr ${cls}" viewBox="0 0 120 80" ${label}>${inner(art, topic, s?.look?.svg)}${extra}</svg>`;
 }
 
 /** The canonical look of each tier, for legends and guides. */
@@ -152,11 +174,17 @@ export const tierArt = (tier: TierId, cls = '') => `<svg class="cr ${cls}" viewB
 export type Mood = 'grumpy' | 'happy' | 'shocked';
 
 /** The Captain: a grumpy orange tabby in a captain's hat. */
-export function captain(mood: Mood = 'grumpy', cls = ''): string {
-  return `<svg class="cat ${cls}" viewBox="0 0 120 112" aria-hidden="true">${captainInner(mood)}</svg>`;
+export function captain(mood: Mood = 'grumpy', cls = '', outfit?: Outfit): string {
+  return `<svg class="cat ${cls}" viewBox="0 0 120 112" aria-hidden="true">${captainInner(mood, outfit)}</svg>`;
 }
 
-function captainInner(mood: Mood): string {
+/** Hat band colour, from the player's rank. */
+export interface Outfit { coat: string; band: string }
+let outfitNow: Outfit = { coat: '#1d3550', band: '#1d3550' };
+/** The Captain dresses for the player's rank everywhere. */
+export const setOutfit = (o: Outfit) => (outfitNow = o);
+
+function captainInner(mood: Mood, outfit: Outfit = outfitNow): string {
   const base = '#e58c45', shade = '#c46a2c', stripe = '#b55d24';
   const eyes =
     mood === 'happy'
@@ -186,7 +214,7 @@ function captainInner(mood: Mood): string {
     <path d="M44 80 L28 77 M44 83 L29 85 M76 80 L92 77 M76 83 L91 85" stroke="#f7f0e3" stroke-width="1.1" opacity=".7" stroke-linecap="round"/>
     <path d="M30 41 C30 24 44 15 60 15 C76 15 90 24 90 41 Z" fill="#f7f0e3"/>
     <path d="M30 41 C30 30 36 22 44 18 C40 24 38 32 38 41 Z" fill="#e8dcc6"/>
-    <rect x="29.5" y="34" width="61" height="9" fill="#1d3550"/>
+    <rect x="29.5" y="34" width="61" height="9" fill="${outfit.band}"/>
     <path d="M27 44 C40 51 80 51 93 44 L91 49 C78 55 42 55 29 49 Z" fill="#10243A"/>
     <circle cx="60" cy="28" r="5.2" fill="#e7ad58"/>
     <path d="M60 25 L60 31 M57.6 26.6 H62.4 M57 29.4 C58 31.2 62 31.2 63 29.4" stroke="#1d3550" stroke-width="1.1" fill="none" stroke-linecap="round"/>`;
@@ -195,6 +223,7 @@ function captainInner(mood: Mood): string {
 /** Home scene: the Captain's boat under the moon. */
 export function harbourScene(): string {
   return `<svg class="scene" viewBox="0 0 360 250" aria-hidden="true">
+    <rect class="weather-tint" x="0" y="0" width="360" height="250" fill="transparent"/>
     <defs><filter id="of-soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="12"/></filter></defs>
     <circle cx="252" cy="74" r="46" fill="#E7AD58" opacity=".28" filter="url(#of-soft)"/>
     <circle cx="252" cy="74" r="31" fill="#F3DDB0"/>
@@ -223,7 +252,7 @@ export function harbourScene(): string {
 
 /** Captain with a little coat, for scenes. */
 function captainBody(): string {
-  return `<path d="M22 150 C20 118 36 100 60 100 C84 100 100 118 98 150 Z" fill="#1d3550"/>
+  return `<path d="M22 150 C20 118 36 100 60 100 C84 100 100 118 98 150 Z" fill="${outfitNow.coat}"/>
     <path d="M60 100 L60 150" stroke="#10243A" stroke-width="2"/><circle cx="54" cy="116" r="2.4" fill="#E7AD58"/><circle cx="54" cy="130" r="2.4" fill="#E7AD58"/>
     ${captainInner('grumpy')}`;
 }
@@ -246,6 +275,16 @@ export const ICON = {
   sound: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
   mute: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4zM16 9.5l5 5M21 9.5l-5 5"/></svg>',
   diamond: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 12 12 21 4 12z"/></svg>',
+  boat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M12 4l6 8h-6M3.5 15h17l-2.5 4.5h-12z"/></svg>',
+  snow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 6l2.5-1.5M9.5 19.5 12 18l2.5 1.5"/></svg>',
+  wave: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 14c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 19c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>',
+  hook: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3v11a4 4 0 0 1-8 0v-2l3 2"/><circle cx="14" cy="3" r="1.2"/></svg>',
+  sonar: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1.6"/><path d="M8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7M5.6 18.4a9 9 0 0 1 0-12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg>',
+  scroll: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h11a2 2 0 0 1 2 2v1h-4M7 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7M9 9h6M9 12.5h6M9 16h4"/></svg>',
+  scale: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M6 20h12M5 8h14M5 8l-2.5 6a2.5 2.5 0 0 0 5 0zM19 8l-2.5 6a2.5 2.5 0 0 0 5 0z"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>',
+  calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="15" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>',
+  target: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8"/></svg>',
 };
 
 /** Wordmark: italic serif with a little wave underneath. */

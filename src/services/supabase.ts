@@ -6,6 +6,7 @@
  * Scoring, validation, rarity and the 20-second deadline are all enforced by the
  * database functions; the client only displays what the server returns.
  */
+import { decorate } from '../core/extras';
 import { tierById, type TierId } from '../config';
 import { speciesId } from '../content/creatures';
 import { currentQuestion, isAnswered, type CastOutcome, type CastState, type CatchRecord } from '../core/game';
@@ -144,6 +145,8 @@ export class OnlineEngine {
       wager: r.wager, pct: r.pct, source: r.source, sample: r.sample,
       species: r.tier === 'boot' ? 'boot' : speciesId(r.tier, q.topic), timedOut: r.timed_out, secondsLeft: r.seconds_left, at: now(),
     };
-    return { state: { ...s, catches: [...s.catches, record], wagerArmed: false, wagerIndex: r.wager ? s.index : s.wagerIndex }, record };
+    // Bait, tide, variants and upgrades are applied on top of the server's catch.
+    const d = decorate(record, s);
+    return { state: { ...s, luckUsed: s.mods ? d.luckUsed : s.luckUsed, catches: [...s.catches, d.rec], wagerArmed: false, wagerIndex: r.wager ? s.index : s.wagerIndex }, record: d.rec };
   }
 }

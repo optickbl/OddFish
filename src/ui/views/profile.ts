@@ -1,4 +1,5 @@
 import { now } from '../../core/clock';
+import { lifetimeKg, rankFor } from '../../core/extras';
 import { computeRecords, liveStreak } from '../../core/progress';
 import { clearSave, exportSave, importSave, loadSave } from '../../services/storage';
 import { onlineAvailable, sendMagicLink, signOut, signedInEmail } from '../../services/supabase';
@@ -21,7 +22,7 @@ export function renderProfile(ctx: Ctx, root: HTMLElement) {
 
   root.innerHTML = `<main id="main" class="view">
     <h1 class="page-title">Profile</h1>
-    <div class="identity">${captain('grumpy')}<div><h2>${esc(save.name)}</h2><p>${email ? `Signed in as ${esc(email)}` : 'Progress saved on this device'}</p>
+    <div class="identity">${captain('grumpy')}<div><h2>${esc(save.name)}</h2><p>${esc(rankFor(lifetimeKg(save)).rank.name)} · ${email ? `signed in as ${esc(email)}` : 'progress saved on this device'}</p>
       <button class="link-btn" data-rename style="padding:6px 0">Change name</button></div></div>
     <div class="mini-stats">
       <div><b>${streak}</b><span>Day streak</span></div>
@@ -50,7 +51,7 @@ export function renderProfile(ctx: Ctx, root: HTMLElement) {
       <button class="link-btn" data-restore>Restore from a backup</button><br>
       <button class="link-btn danger" data-reset>Reset all progress</button>
     </section>
-    <p class="version">Oddfish 1.0 · Daily Cast #${ctx.today()}</p>
+    <p class="version">Oddfish 1.1 · Daily Cast #${ctx.today()}</p>
   </main>`;
 
   root.querySelectorAll<HTMLButtonElement>('[data-sw]').forEach((b) =>

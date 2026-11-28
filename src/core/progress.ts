@@ -28,6 +28,25 @@ export interface SaveData {
   history: CastSummary[];
   /** First catch time and count per species id. */
   found: Record<string, { first: number; count: number }>;
+  /** Spendable kilos: every haul goes in, upgrades and wagers come out. */
+  purse: number;
+  /** Streak freezes held. */
+  freezes: number;
+  /** Days covered by a freeze. */
+  frozenDays: number[];
+  upgrades: { rod: number; lantern: number; sonar: number; net: number };
+  /** Weeks whose Captain's orders were paid. */
+  ordersClaimed: number[];
+  /** Aquarium exhibits completed and paid. */
+  exhibitsDone: string[];
+  /** Streak milestones already celebrated (in days). */
+  milestonesSeen: number[];
+  streakWager: { start: number; stake: number } | null;
+  lastStreakWager: { stake: number; won: boolean } | null;
+  /** Daily Cast number on which the last missed-day cast was started. */
+  archivePlayedOn: number;
+  /** Captain's Log pages already read. */
+  pagesSeen: number;
 }
 
 export function freshSave(now: number, randomId: string): SaveData {
@@ -43,6 +62,17 @@ export function freshSave(now: number, randomId: string): SaveData {
     current: null,
     history: [],
     found: {},
+    purse: 0,
+    freezes: 0,
+    frozenDays: [],
+    upgrades: { rod: 0, lantern: 0, sonar: 0, net: 0 },
+    ordersClaimed: [],
+    exhibitsDone: [],
+    milestonesSeen: [],
+    streakWager: null,
+    lastStreakWager: null,
+    archivePlayedOn: 0,
+    pagesSeen: 0,
   };
 }
 

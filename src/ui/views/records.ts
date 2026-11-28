@@ -1,5 +1,6 @@
 import { tierById } from '../../config';
 import { SPECIES } from '../../content/creatures';
+import { lifetimeKg, rankFor } from '../../core/extras';
 import { computeRecords } from '../../core/progress';
 import { ICON, captain, creature, speciesName } from '../art';
 import type { Ctx } from '../ctx';
@@ -25,6 +26,9 @@ export function renderRecords(ctx: Ctx, root: HTMLElement) {
       <li><span class="k">Longest streak</span><span class="v">${r.longestStreak} ${r.longestStreak === 1 ? 'day' : 'days'}</span></li>
       <li><span class="k">Total catches</span><span class="v">${fmtNum(r.totalCatches)}</span></li>
       <li><span class="k">Unique creatures</span><span class="v">${r.uniqueCreatures} / ${SPECIES.length}</span></li>
+      <li><span class="k">Lifetime haul<small>${esc(rankFor(lifetimeKg(ctx.save)).rank.name)}</small></span><span class="v">${fmtKg(lifetimeKg(ctx.save))}</span></li>
+      <li><span class="k">Shiny, Night and Mutant catches</span><span class="v">${fmtNum(ctx.save.history.flatMap((h) => h.catches).filter((c) => c.variant).length)}</span></li>
+      <li><span class="k">Seasonal and Abyss catches</span><span class="v">${fmtNum(ctx.save.history.flatMap((h) => h.catches).filter((c) => c.special).length)}</span></li>
     </ul>
   </main>`;
 }

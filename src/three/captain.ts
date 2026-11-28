@@ -32,6 +32,8 @@ export interface Captain {
   root: THREE.Group;
   setMood(m: Mood): void;
   update(t: number, dt: number): void;
+  /** Coat and hat-band colours, from the player's rank. */
+  setOutfit(coat: string, band: string): void;
 }
 
 /** A pivot group at `centre` (model space) that holds `obj`, so rotations happen around that point. */
@@ -63,7 +65,7 @@ function clipCaptain(src: THREE.Group): Captain {
     current = next;
   };
   play('idle');
-  return { root, setMood: play, update: (_t, dt) => mixer.update(dt) };
+  return { root, setMood: play, update: (_t, dt) => mixer.update(dt), setOutfit: () => {} };
 }
 
 export async function makeCaptain(): Promise<Captain> {
@@ -122,6 +124,13 @@ export async function makeCaptain(): Promise<Captain> {
     setMood(m) {
       mood = m;
       moodT = 0;
+    },
+    setOutfit(coat, band) {
+      const c = cache.get('Coat') as THREE.MeshPhysicalMaterial | undefined;
+      const b = cache.get('HatBand') as THREE.MeshPhysicalMaterial | undefined;
+      c?.color.set(coat);
+      c?.sheenColor.set(coat).lerp(new THREE.Color('#ffffff'), 0.35);
+      b?.color.set(band);
     },
     update(t, dt) {
       moodT += dt;
